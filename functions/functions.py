@@ -3,6 +3,14 @@ from matplotlib.collections import LineCollection
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import dendrogram
+import plotly.graph_objects as go
+from sklearn.preprocessing import MinMaxScaler
+from time import time
+from sklearn import metrics
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+import plotly.graph_objects as go
+from sklearn.preprocessing import MinMaxScaler
 
 def display_circles(pcs, n_comp, pca, axis_ranks, labels=None, label_rotation=0, lims=None):
     for d1, d2 in axis_ranks: # On affiche les 3 premiers plans factoriels, donc les 6 premières composantes
@@ -113,4 +121,111 @@ def plot_dendrogram(Z, names):
         orientation = "left",
     )
     plt.show()
+    
+    
+ 
+    
+    
+    
+
+
+
+def plot_radars(data, group,cls):
+     
+    scaler = MinMaxScaler()
+    labels = data[group]
+    data = data[[col for col in data.columns.tolist() if not col.startswith(group)]]
+    data = pd.DataFrame(scaler.fit_transform(data), 
+                        index=data.index,
+                        columns=data.columns).reset_index()
+    data[group]=labels
+    
+    fig = go.Figure()
+    #theta=data.columns[1:]
+    theta=[col for col in data.columns.tolist() if col not in ['kmeans_label_1','kmeans_label_2','index']  if not col.startswith('pca')]
+   
+    
+    #print('theta',theta)
+   # print('r',r)
+   # for k in data[group]:
+    for k in cls:
+            fig.add_trace(go.Scatterpolar(
+                    r=data[data[group]==k].iloc[:,1:].values.reshape(-1),
+                    theta=theta,
+                    fill='toself',
+                    name='Cluster '+str(k),
+                
+                
+                ))
+
+    fig.update_layout(
+        polar=dict(
+        radialaxis=dict(
+          visible=True,
+          range=[0, 1]
+        )),
+        showlegend=True,
+        title={
+            'text': "",
+            'y':0.95,
+            'x':0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'},
+      # title_font_color="blue",
+        title_font_size=18)
+
+    fig.show()
+    
+
+
+
+def bench_k_means(kmeans, name, data, labels):
+    """Benchmark to evaluate the KMeans initialization methods.
+
+    Parameters
+    ----------
+    kmeans : KMeans instance
+        A :class:`~sklearn.cluster.KMeans` instance with the initialization
+        already set.
+    name : str
+        Name given to the strategy. It will be used to show the results in a
+        table.
+    data : ndarray of shape (n_samples, n_features)
+        The data to cluster.
+    labels : ndarray of shape (n_samples,)
+        The labels used to compute the clustering metrics which requires some
+        supervision.
+    """
+    
+    t0 = time()
+    estimator = make_pipeline(StandardScaler(), kmeans).fit(data)
+    fit_time = time() - t0
+    results = [name, fit_time, estimator[-1].inertia_]
+
+    # Define the metrics which require only the true labels and estimator
+    # labels
+    clustering_metrics = [
+        metrics.homogeneity_score,
+        metrics.completeness_score,
+        metrics.v_measure_score,
+        metrics.adjusted_rand_score,
+        metrics.adjusted_mutual_info_score,
+    ]
+    results += [m(labels, estimator[-1].labels_) for m in clustering_metrics]
+
+    # The silhouette score requires the full dataset
+    results += [
+        metrics.silhouette_score(
+            data,
+            estimator[-1].labels_,
+            metric="euclidean",
+            sample_size=300,
+        )
+    ]
+
+    # Show the results
+    formatter_result = (
+        "{:9s}\t{:.3f}s\t{:.0f}\t{:.3f}\t{:.3f}\t{:.3f}\t{:.3f}\t{:.3f}\t{:.3f}"
+    )
+    print(formatter_result.format(*results))
 
